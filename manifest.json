@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Random Address",
+  "version": "0.1.0",
+  "description": "Generate a random US name, address, phone and email for signup forms. Fully offline.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Random Address"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"
+  }
+}

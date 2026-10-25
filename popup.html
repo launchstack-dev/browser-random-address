@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Random Address</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <select id="state" aria-label="State"></select>
+    <button id="generate" class="primary">Generate</button>
+  </header>
+  <ul id="fields"></ul>
+  <label class="domain">Email domain
+    <input id="domain" value="example.com" spellcheck="false" autocomplete="off">
+  </label>
+  <div class="actions">
+    <button id="copy-line">Copy address</button>
+    <button id="autofill" class="primary">Autofill this page</button>
+  </div>
+  <p id="status" role="status"></p>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
