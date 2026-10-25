@@ -158,7 +158,10 @@ There is no build step and no dependencies. Node runs the tests (developed on No
 npm run ci      # no-network check plus all tests
 npm run check   # just the no-network check
 npm test        # just the tests
+npm run package # build dist/random-address-<version>.zip for the Chrome Web Store
 ```
+
+Store listing copy, permission justifications and screenshots are in [docs/store-listing.md](docs/store-listing.md). `scripts/make-icons.py` redraws the icons (needs Pillow, development only).
 
 ## Glossary
 
