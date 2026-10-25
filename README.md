@@ -52,12 +52,33 @@ What these prove, and what they don't: steps 1 and 3 show the extension works of
 
 ## Install
 
-Random Address isn't in the Chrome Web Store yet. Install it from source in Chrome or Brave (tested on Brave), or in another Chromium-based browser:
+Random Address isn't in the Chrome Web Store yet, so you install it from source as an unpacked extension. It works in Chrome and Brave (tested on Brave) and should work in other Chromium-based browsers, such as Edge. It is desktop only: Chrome for Android doesn't run extensions.
 
-1. Clone or download this repository.
-2. Open `chrome://extensions` (or `brave://extensions`) and turn on **Developer mode**.
-3. Click **Load unpacked** and choose this folder.
-4. Pin the extension from the puzzle-piece menu.
+### 1. Get the files
+
+- **With git:** `git clone https://github.com/launchstack-dev/browser-random-address.git`
+- **Without git:** on the repository page choose **Code**, then **Download ZIP**, and unzip it. Browsers load folders, not zip files.
+- **Just the shipped files:** run `npm run package` and unzip `dist/random-address-<version>.zip`. That folder has no tests or docs.
+
+Put the folder somewhere permanent. The browser runs the extension from it, so moving or deleting it breaks the extension.
+
+### 2. Load it
+
+1. Open `brave://extensions` (or `chrome://extensions`, or `edge://extensions`).
+2. Turn on **Developer mode** with the toggle in the top right.
+3. Click **Load unpacked** and pick the folder that directly contains `manifest.json`. If you cloned the repository, that is the top-level folder, not `docs/` or `lib/`.
+4. Pin it: click the puzzle-piece icon in the toolbar, then the pin next to Random Address.
+
+### Update
+
+Run `git pull` (or download the new version over the old folder), then click the reload arrow on the extension's card in `brave://extensions`.
+
+### If something looks wrong
+
+- **"Manifest file is missing or unreadable":** you picked the wrong folder. Pick the one that contains `manifest.json`.
+- **No "Load unpacked" button:** Developer mode is off.
+- **A "disable developer mode extensions" prompt at startup (Chrome):** you can dismiss it. The extension keeps working.
+- **Anything else:** click **Errors** on the extension's card, or open an [issue](https://github.com/launchstack-dev/browser-random-address/issues).
 
 ## Use
 
