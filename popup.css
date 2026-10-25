@@ -18,8 +18,10 @@ li { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom
 li .label { width: 48px; color: var(--muted); font-size: 11px; text-transform: uppercase; }
 li .value { flex: 1; overflow-wrap: anywhere; user-select: all; }
 li button { padding: 2px 6px; font-size: 12px; }
-.domain { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); }
-.domain input { flex: 1; }
+.setting { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); }
+.setting input, .setting select { flex: 1; }
+li input[type=checkbox] { margin: 0; accent-color: var(--accent); }
+li.off .value, li.off .label { opacity: .45; }
 .actions { display: flex; gap: 8px; margin-top: 10px; }
 .actions button { flex: 1; }
 #status { min-height: 1.4em; margin: 8px 0 0; color: var(--muted); }

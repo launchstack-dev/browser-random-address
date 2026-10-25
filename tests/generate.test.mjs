@@ -73,3 +73,12 @@ test('titleCase handles all-caps source names', async () => {
   assert.equal(titleCase('MCDONALD'), 'McDonald');
   assert.equal(titleCase('Mary'), 'Mary');
 });
+
+test('random email style is unrelated to the name and works in reroll', () => {
+  const p = generate('CA', { data, emailStyle: 'random', domain: 'me.example', rng: counter() });
+  assert.match(p.email, /^[a-z][a-z0-9]{10}@me\.example$/);
+  assert.ok(!p.email.includes(p.first.toLowerCase()));
+  const q = reroll(p, 'first', { data, emailStyle: 'random', domain: 'me.example', rng: one });
+  assert.match(q.email, /^[a-z][a-z0-9]{10}@me\.example$/);
+  assert.match(reroll(p, 'email', { data, emailStyle: 'name', rng: one }).email, /^[a-z]+\.[a-z]+\d\d@example\.com$/);
+});

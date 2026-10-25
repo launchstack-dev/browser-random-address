@@ -13,11 +13,18 @@ const FIELDS = [
 
 const $ = (id) => document.getElementById(id);
 let person = null;
+let enabled = Object.fromEntries(FIELDS.map(([key]) => [key, true]));
 
 const say = (msg) => { $('status').textContent = msg; };
 
 function ctx() {
-  return { data, domain: $('domain').value.trim() || 'example.com' };
+  return { data, domain: $('domain').value.trim() || 'example.com', emailStyle: $('email-style').value };
+}
+
+function saveSettings() {
+  chrome.storage.local.set({
+    state: $('state').value, domain: $('domain').value.trim(), emailStyle: $('email-style').value, enabled,
+  });
 }
 
 function render() {
@@ -25,11 +32,20 @@ function render() {
   list.replaceChildren();
   for (const [key, label] of FIELDS) {
     const li = document.createElement('li');
+    li.classList.toggle('off', !enabled[key]);
+    const use = Object.assign(document.createElement('input'), {
+      type: 'checkbox', checked: enabled[key], title: `Include ${label} when autofilling`,
+    });
+    use.addEventListener('change', () => {
+      enabled[key] = use.checked;
+      li.classList.toggle('off', !use.checked);
+      saveSettings();
+    });
     const name = Object.assign(document.createElement('span'), { className: 'label', textContent: label });
     const value = Object.assign(document.createElement('span'), { className: 'value', textContent: person[key] });
     const copy = Object.assign(document.createElement('button'), { textContent: 'Copy', title: `Copy ${label}` });
     copy.addEventListener('click', () => copyText(person[key], label));
-    li.append(name, value, copy);
+    li.append(use, name, value, copy);
     if (key !== 'state') {
       const dice = Object.assign(document.createElement('button'), { textContent: '↻', title: `Re-roll ${label}` });
       dice.addEventListener('click', () => update(() => reroll(person, key, ctx())));
@@ -65,7 +81,7 @@ async function autofill() {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
       func: fillForm,
-      args: [person],
+      args: [person, enabled],
     });
     const total = results.reduce((n, r) => n + (r.result || 0), 0);
     say(total ? `Filled ${total} field${total === 1 ? '' : 's'}` : 'No matching fields found');
@@ -85,9 +101,11 @@ function boot(saved) {
   const usable = (code) => addresses[code]?.length > 0;
   select.value = usable(saved.state) ? saved.state : Object.keys(STATES).find(usable);
   $('domain').value = saved.domain || 'example.com';
+  $('email-style').value = saved.emailStyle === 'random' ? 'random' : 'name';
+  enabled = { ...enabled, ...saved.enabled };
 
   $('generate').addEventListener('click', () => {
-    chrome.storage.local.set({ state: select.value, domain: $('domain').value.trim() });
+    saveSettings();
     update(() => generate(select.value, ctx()));
   });
   $('copy-line').addEventListener('click', () => copyText(oneLineAddress(person), 'address'));
@@ -96,4 +114,4 @@ function boot(saved) {
   $('generate').click();
 }
 
-chrome.storage.local.get(['state', 'domain']).then(boot, () => boot({}));
+chrome.storage.local.get(['state', 'domain', 'emailStyle', 'enabled']).then(boot, () => boot({}));

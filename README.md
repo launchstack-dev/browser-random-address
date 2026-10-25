@@ -11,7 +11,7 @@ Built for people who don't want to hand real details to every signup sheet. It h
 | Street, city, ZIP | A real address point from the USDOT [National Address Database](https://www.transportation.gov/gis/national-address-database), about 1,000 per state (50 states + DC), bundled in the extension |
 | First / last name | SSA baby names (1970–2008) and US Census 2010 surnames, both US government data. Never paired with a real person |
 | Phone | A real area code for the state, then `555-0100`–`555-0199`, a block reserved for fiction, so it can't ring anyone |
-| Email | `first.last##@example.com`. The domain is editable (use your own catch-all if you want the mail) |
+| Email | `first.last##@example.com` or a random local part like `k7qx2m9p4w@…`. The domain is editable. Point it at a catch-all domain (SimpleLogin, Proton, your own) and each address becomes a working alias |
 
 The addresses are real public address points for form-filling and testing. Don't use them to misrepresent who you are where that matters (banking, government, payments).
 
@@ -30,6 +30,7 @@ The addresses are real public address points for form-filling and testing. Don't
 
 1. `chrome://extensions` → turn on Developer mode → **Load unpacked** → pick this folder.
 2. Pick a state, press **Generate**, then **Autofill this page** or copy fields one by one. ↻ re-rolls a single field.
+3. The checkbox on each row decides whether that field is included in autofill, so you can leave the email to Proton Pass or SimpleLogin's own autofill. Your checkbox choices, email domain and email style are remembered.
 
 Autofill matches `autocomplete` attributes first, then field names, ids, placeholders and labels. It fills empty fields only (plus fields it filled earlier), skips passwords, usernames, company and card fields, and doesn't reach into shadow DOM.
 
