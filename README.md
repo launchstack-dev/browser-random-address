@@ -126,7 +126,7 @@ Every field traces back to a source:
 
 | Data | Source | Version | Terms |
 |---|---|---|---|
-| Street, city, ZIP | USDOT National Address Database, text file release 24 | Downloaded 2026-10-25 | **Redistribution terms unconfirmed.** The catalog records disagree, and a written answer from nad@dot.gov is pending |
+| Street, city, ZIP | USDOT National Address Database, text file release 24 | Downloaded 2026-10-25 | Per DOT's [published disclaimer](docs/nad-terms.md), a federal work not subject to copyright (17 U.S.C. § 105) and "available for re-use without limitation or restriction". Provided as is, and not intended for mailing lists |
 | First names | SSA baby names, top 1,000 per year and sex, 1970 to 2008, via the [hadley/data-baby-names](https://github.com/hadley/data-baby-names) mirror (ssa.gov blocks scripted downloads) | 2008 data, the mirror's last year | SSA data is a US government work. The mirror has no license file of its own |
 | Surnames | [US Census 2010 surnames](https://www.census.gov/topics/population/genealogy/data/2010_surnames.html), top 1,000 | 2010 | US government work |
 | Area codes | Real, in-service NANP area codes per state, written by hand | n/a | n/a |
@@ -134,7 +134,7 @@ Every field traces back to a source:
 
 What the build removes: unit, building, floor, room and landmark rows; rows with placeholder or junk streets or cities; rows with invalid ZIPs; `(city, ZIP)` pairs that appear fewer than three times; coordinates and every other NAD field. It then keeps a random sample per state. NAD is aggregated from many local sources, so a few mislabeled rows can survive.
 
-**Before this repository goes public,** confirm NAD's redistribution terms with nad@dot.gov.
+NAD is not a mailing list and neither is this extension: please don't use the addresses for mailings. DOT's terms and what they leave open are summarized in [docs/nad-terms.md](docs/nad-terms.md).
 
 ## Building the data
 
@@ -170,4 +170,4 @@ npm test        # just the tests
 
 ## License
 
-The code is [MIT](LICENSE). The bundled data has its own terms: SSA and Census data are US government works, and NAD's redistribution terms are still being confirmed (see [Provenance](#provenance)).
+The code is [MIT](LICENSE). The bundled data has its own terms: SSA and Census data are US government works, and NAD's published terms allow re-use without restriction but exclude mailing-list use (see [Provenance](#provenance)).

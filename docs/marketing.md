@@ -61,7 +61,7 @@ The README headings and FAQ use the phrases people actually type. Keep them as r
 
 ## Before it goes public
 
-- [ ] Email nad@dot.gov for written confirmation of NAD's redistribution terms, then update the Provenance table.
+- [x] NAD terms researched: DOT publishes re-use without restriction, with a mailing-list caveat. See `docs/nad-terms.md`. Decided to rely on the published disclaimer and not email NAD@dot.gov.
 - [x] License: MIT, in `LICENSE`. The copyright line says "Jensen Carlsen"; change it if that isn't the name or entity you want.
 - [ ] Set the GitHub About line and topics above.
 - [ ] Add a social preview image (1280×640) in the repository settings.
