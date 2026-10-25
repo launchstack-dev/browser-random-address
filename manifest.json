@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Random Address",
   "version": "0.1.0",
-  "description": "Generate a random US name, address, phone and email for signup forms. Fully offline.",
+  "description": "Offline random US name, address, phone and email generator with one-click form autofill. No network access.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Random Address"
