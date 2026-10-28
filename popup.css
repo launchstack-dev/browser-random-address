@@ -26,3 +26,6 @@ li.off .value, li.off .label { opacity: .45; }
 .actions { display: flex; gap: 8px; margin-top: 10px; }
 .actions button { flex: 1; }
 #status { min-height: 1.4em; margin: 8px 0 0; color: var(--muted); }
+body.page { width: auto; max-width: 480px; margin: 0 auto; padding: 16px; }
+body.page h1 { font-size: 16px; margin: 0 0 8px; }
+.note { color: var(--muted); margin: 4px 0 8px; }
