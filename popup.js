@@ -119,9 +119,12 @@ async function newAlias(button) {
   try {
     // The popup never prompts (a prompt can close it, and Firefox wants it inside a
     // click). Access is granted on the options page; send the user there if it's missing.
-    if (!(await chrome.permissions.contains(accessFor(service, false)))) {
+    // On Firefox, consent to the data the service receives can be withdrawn separately
+    // from site access, so check both. The popup never prompts, so awaiting here is fine.
+    const dataConsent = 'data_collection' in (await chrome.permissions.getAll());
+    if (!(await chrome.permissions.contains(accessFor(service, dataConsent)))) {
       done = `Allow ${label} on the alias settings page first.`;
-      chrome.runtime.openOptionsPage();
+      chrome.runtime.openOptionsPage().catch(() => {});
       return;
     }
     say(`Creating a ${label} alias. Keep this open…`);
@@ -137,6 +140,11 @@ async function newAlias(button) {
     render();
     say(done);
   }
+}
+
+function showAliasSummary() {
+  $('alias-summary').textContent = aliasService ? ALIAS_SERVICES[aliasService].label : 'off';
+  $('alias-settings').textContent = aliasService ? 'Change' : 'Set up';
 }
 
 async function autofill() {
@@ -171,9 +179,16 @@ function boot(saved) {
   aliasKeys = Object.fromEntries(Object.keys(ALIAS_SERVICES).map((id) => [id, String(saved.aliasKeys?.[id] ?? '')]));
   // Builds before per-service keys kept one shared key; it is not migrated, only removed.
   chrome.storage.local.remove('aliasKey').catch(() => {});
-  $('alias-summary').textContent = aliasService ? ALIAS_SERVICES[aliasService].label : 'off';
-  $('alias-settings').textContent = aliasService ? 'Change' : 'Set up';
-  $('alias-settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
+  showAliasSummary();
+  $('alias-settings').addEventListener('click', () => chrome.runtime.openOptionsPage().catch(() => {}));
+  // Settings can change on the options page while this popup is open.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !(changes.aliasService || changes.aliasKeys)) return;
+    if (changes.aliasService) aliasService = Object.hasOwn(ALIAS_SERVICES, changes.aliasService.newValue) ? changes.aliasService.newValue : '';
+    if (changes.aliasKeys) aliasKeys = { ...aliasKeys, ...changes.aliasKeys.newValue };
+    showAliasSummary();
+    if (person) render();
+  });
 
   $('generate').addEventListener('click', async () => {
     saveSettings();
