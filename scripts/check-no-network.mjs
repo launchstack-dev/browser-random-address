@@ -3,7 +3,7 @@
 // opt-in alias services in lib/alias.js. Run by `npm run ci`.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const problems = [];
@@ -32,14 +32,18 @@ const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 's
   + `connect-src ${ALIAS_ORIGINS.join(' ')}; base-uri 'none'; form-action 'none'`;
 if (manifest.content_security_policy?.extension_pages !== CSP) fail(`CSP must be exactly "${CSP}"`);
 
-// Text matching can't see a URL assembled from pieces, so also load the alias
-// module and check where each service actually points.
-const { ALIAS_SERVICES, permissionFor } = await import(pathToFileURL(join(root, 'lib/alias.js')).href);
-for (const [id, svc] of Object.entries(ALIAS_SERVICES)) {
-  let origin = '';
-  try { origin = new URL(svc.url).origin; } catch {}
-  if (!ALIAS_ORIGINS.includes(origin)) fail(`lib/alias.js service ${id} points outside the alias origins: ${svc.url}`);
-  if (!ALIAS_HOSTS.includes(permissionFor(id))) fail(`lib/alias.js service ${id} asks for a host the manifest doesn't allow`);
+// The alias services' URLs, checked as text. The check never runs shipped code,
+// so nothing in a shipped file can influence its result. Every url: property in
+// lib/alias.js must be one of these exact literals, and nothing may rewrite one.
+const ALIAS_URLS = ['https://relay.firefox.com/api/v1/relayaddresses/', 'https://quack.duckduckgo.com/api/email/addresses'];
+for (const u of ALIAS_URLS) if (!ALIAS_ORIGINS.includes(new URL(u).origin)) fail(`alias URL outside the alias origins: ${u}`);
+const aliasSource = readFileSync(join(root, 'lib/alias.js'), 'utf8');
+const urlValues = [...aliasSource.matchAll(/\burl\s*:\s*([^,\n}]+)/g)].map((m) => m[1].trim()).sort();
+if (JSON.stringify(urlValues) !== JSON.stringify(ALIAS_URLS.map((u) => `'${u}'`).sort())) {
+  fail(`lib/alias.js service URLs must be exactly ${ALIAS_URLS.join(' and ')}, found: ${urlValues.join(', ') || 'none'}`);
+}
+if (/\.url\s*=(?!=)|\[\s*['"`]url['"`]\s*\]|defineProperty|Object\.assign/.test(aliasSource)) {
+  fail('lib/alias.js must not rewrite a service URL');
 }
 
 // Everything that ships. Build scripts, tests and docs may use the network or mention URLs.
@@ -50,6 +54,15 @@ const FORBIDDEN = [
   [/\bimport\s*\(/, 'dynamic import()'], [/\beval\s*\(/, 'eval('], [/new\s+Function\b/, 'new Function'],
   [/https?:\/\//, 'http(s):// URL'], [/\/\/[a-z0-9.-]+\.[a-z]{2,}\//i, 'protocol-relative URL'],
   [/chrome\.(runtime\.sendMessage|identity|webRequest|cookies|history|downloads)/, 'extra chrome API'],
+  // Other ways out, mostly for lib/autofill.js, which runs inside the web page where the
+  // extension CSP doesn't apply: computed lookups that hide a name from this check,
+  // image beacons, navigation, and markup or elements that load from a URL.
+  [/\b(window|globalThis|self|document)\s*\[/, 'computed global access'],
+  [/\bnew\s+Image\b/, 'new Image'], [/\.src\s*=(?!=)/, '.src assignment'],
+  [/\blocation\b\s*(=(?!=)|\.\s*(href|assign|replace))/, 'navigation'], [/\bopen\s*\(/, 'open('],
+  [/innerHTML|outerHTML|insertAdjacentHTML|srcdoc|document\.write/, 'HTML from a string'],
+  [/createElement\s*\(\s*['"`](img|script|iframe|link|a|form|object|embed|audio|video|source|meta|style)\b/, 'loading element'],
+  [/setAttribute\s*\(\s*['"`](src|href|action|formaction|srcset|poster|data)\b/, 'URL attribute'],
 ];
 
 // Allowed exceptions, matched exactly. The address loader imports a bundled per-state

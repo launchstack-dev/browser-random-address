@@ -43,12 +43,12 @@ What these prove, and what they don't: steps 1 and 3 show the extension works of
 | Claim | How to check it |
 |---|---|
 | It asks for no access to websites | `manifest.json` has no `host_permissions` or `content_scripts`. Its `optional_host_permissions` are only the two alias services, granted only if you pick one |
-| Its pages can't send data anywhere else | The manifest CSP sets `default-src 'none'` and allows connections only to `relay.firefox.com` and `quack.duckduckgo.com`. The autofill routine runs inside the page, outside that CSP, and is covered by the source check |
+| Its pages can't send data anywhere else | The manifest CSP sets `default-src 'none'` and allows connections only to `relay.firefox.com` and `quack.duckduckgo.com`. The autofill routine runs inside the page, outside that CSP. The source check rejects the usual ways out (network calls, URLs, image beacons, navigation, loading elements, computed lookups), but it is a text check, not a sandbox |
 | Its only network code is the alias button | `npm run check` |
 | That check actually works | `tests/check-no-network.test.mjs` |
 | It has no dependencies | `package.json` lists none. There is no build step and no minification |
 | It only runs when you click | There is no background page or content script. Autofill is injected into the current tab when you press the button, through `activeTab` |
-| It stores nothing but your settings | `chrome.storage.local` holds your state, email domain, email style, checkbox choices and, if you use one, your alias service and its key, and nothing else |
+| It stores nothing but your settings | `chrome.storage.local` holds your state, email domain, email style, checkbox choices and, if you use one, your alias service and its key. `chrome.storage.session` holds the last alias you created and its site until you quit the browser. Nothing else |
 
 ## Install
 

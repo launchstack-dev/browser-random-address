@@ -20,6 +20,8 @@ let site = '';
 // name re-rolls, and survives the popup closing (session storage), so a limited
 // Relay quota isn't spent twice. Only ↻ on Email or a different site drops it.
 let aliasEmail = '';
+// True while an alias request is in flight. A re-render mid-request draws @ disabled.
+let creating = false;
 // Each service keeps its own key, so switching services never sends one service's key to the other.
 let aliasKeys = {};
 let enabled = Object.fromEntries(FIELDS.map(([key]) => [key, true]));
@@ -74,7 +76,7 @@ function render() {
     const service = $('alias-service').value;
     if (key === 'email' && service) {
       const alias = Object.assign(document.createElement('button'), {
-        textContent: '@', title: `New ${ALIAS_SERVICES[service].label} alias`,
+        textContent: '@', title: `New ${ALIAS_SERVICES[service].label} alias`, disabled: creating,
       });
       alias.addEventListener('click', () => newAlias(alias));
       li.append(alias);
@@ -118,24 +120,30 @@ async function ensureAccess(service) {
 
 // The only path to the network: one click, one alias.
 async function newAlias(button) {
+  if (creating) return;
+  creating = true;
+  button.disabled = true;
   const service = $('alias-service').value;
   const { label } = ALIAS_SERVICES[service];
-  button.disabled = true;
-  const denied = await ensureAccess(service);
-  if (denied) {
-    button.disabled = false;
-    return say(denied);
-  }
-  say(`Creating a ${label} alias. Keep this open…`);
+  let done = '';
   try {
+    const denied = await ensureAccess(service);
+    if (denied) {
+      done = denied;
+      return;
+    }
+    say(`Creating a ${label} alias. Keep this open…`);
     const email = await createAlias(service, { apiKey: aliasKeys[service], site });
     aliasEmail = email;
     chrome.storage.session.set({ lastAlias: { email, site } }).catch(() => {});
-    update(() => ({ ...person, email }));
-    say(`New ${label} alias`);
+    person = { ...person, email };
+    done = `New ${label} alias`;
   } catch (err) {
-    button.disabled = false;
-    say(err.message);
+    done = err.message;
+  } finally {
+    creating = false;
+    render();
+    say(done);
   }
 }
 
@@ -179,6 +187,8 @@ function boot(saved) {
     services.append(Object.assign(document.createElement('option'), { value: id, textContent: label }));
   }
   services.value = Object.hasOwn(ALIAS_SERVICES, saved.aliasService) ? saved.aliasService : '';
+  // Builds before per-service keys kept one shared key; it is not migrated, only removed.
+  chrome.storage.local.remove('aliasKey').catch(() => {});
   aliasKeys = Object.fromEntries(Object.keys(ALIAS_SERVICES).map((id) => [id, String(saved.aliasKeys?.[id] ?? '')]));
   showAliasKey();
   let current = services.value;
