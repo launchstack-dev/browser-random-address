@@ -43,3 +43,20 @@ test('the check fails when a host permission is added', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /host_permissions/);
 });
+
+test('the check fails on import() anywhere but the address loader', () => {
+  const dir = copyProject();
+  appendFileSync(join(dir, 'popup.js'), "\nimport('./lib/states.js');\n");
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /popup\.js contains dynamic import\(\)/);
+});
+
+test('the check fails when the address loader imports anything else', () => {
+  const dir = copyProject();
+  const file = join(dir, 'lib/addresses.js');
+  writeFileSync(file, readFileSync(file, 'utf8').replace('`../data/addresses/${state}.js`', '`../data/${state}.js`'));
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /lib\/addresses\.js contains dynamic import\(\)/);
+});
