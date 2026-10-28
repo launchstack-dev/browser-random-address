@@ -15,7 +15,7 @@ test('package zip holds exactly the shipped files', () => {
   const zip = join(out, `random-address-${version}.zip`);
   assert.ok(existsSync(zip));
   const entries = execFileSync('unzip', ['-Z1', zip]).toString().split('\n').filter(Boolean);
-  for (const needed of ['manifest.json', 'popup.html', 'popup.js', 'lib/generate.js', 'data/addresses.js', 'icons/icon-128.png']) {
+  for (const needed of ['manifest.json', 'popup.html', 'popup.js', 'lib/generate.js', 'lib/addresses.js', 'data/addresses/index.js', 'data/addresses/CA.js', 'icons/icon-128.png']) {
     assert.ok(entries.includes(needed), `${needed} is in the zip`);
   }
   const leaked = entries.filter((e) => /^(tests|scripts|docs|node_modules|\.git|dist)\//.test(e) || /^(README|LICENSE|package)/.test(e));

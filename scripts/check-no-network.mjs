@@ -33,6 +33,10 @@ const FORBIDDEN = [
   [/chrome\.(runtime\.sendMessage|identity|webRequest|cookies|history|downloads)/, 'extra chrome API'],
 ];
 
+// The one allowed exception, matched exactly: the address loader imports a bundled
+// per-state data file. Any other import(), including an edited copy of this one, fails.
+const ALLOWED = { 'lib/addresses.js': ['import(`../data/addresses/${state}.js`)'] };
+
 function* files(path) {
   if (statSync(path).isDirectory()) {
     for (const f of readdirSync(path)) yield* files(join(path, f));
@@ -41,7 +45,7 @@ function* files(path) {
 
 for (const entry of SHIPPED) {
   for (const file of files(join(root, entry))) {
-    const text = readFileSync(file, 'utf8');
+    const text = (ALLOWED[relative(root, file)] ?? []).reduce((t, ok) => t.replaceAll(ok, ''), readFileSync(file, 'utf8'));
     for (const [re, label] of FORBIDDEN) {
       if (re.test(text)) fail(`${relative(root, file)} contains ${label}`);
     }
