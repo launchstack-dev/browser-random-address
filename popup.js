@@ -2,6 +2,7 @@ import { STATES } from './lib/states.js';
 import { generate, reroll, oneLineAddress, EMAIL_STYLES } from './lib/generate.js';
 import { fillForm } from './lib/autofill.js';
 import { hasAddresses, loadAddresses } from './lib/addresses.js';
+import { ALIAS_SERVICES, createAlias, permissionFor } from './lib/alias.js';
 import names from './data/names.js';
 import areaCodes from './data/areacodes.js';
 
@@ -15,6 +16,14 @@ const FIELDS = [
 const $ = (id) => document.getElementById(id);
 let person = null;
 let site = '';
+// The alias created for this site. It stays in the Email field through Generate and
+// name re-rolls, and survives the popup closing (session storage), so a limited
+// Relay quota isn't spent twice. Only ↻ on Email or a different site drops it.
+let aliasEmail = '';
+// True while an alias request is in flight. A re-render mid-request draws @ disabled.
+let creating = false;
+// Each service keeps its own key, so switching services never sends one service's key to the other.
+let aliasKeys = {};
 let enabled = Object.fromEntries(FIELDS.map(([key]) => [key, true]));
 
 const say = (msg) => { $('status').textContent = msg; };
@@ -26,7 +35,15 @@ function ctx() {
 function saveSettings() {
   chrome.storage.local.set({
     state: $('state').value, domain: $('domain').value.trim(), emailStyle: $('email-style').value, enabled,
+    aliasService: $('alias-service').value, aliasKeys,
   });
+}
+
+const keepAlias = (next) => (aliasEmail ? { ...next, email: aliasEmail } : next);
+
+function forgetAlias() {
+  aliasEmail = '';
+  chrome.storage.session.remove('lastAlias').catch(() => {});
 }
 
 function render() {
@@ -50,8 +67,19 @@ function render() {
     li.append(use, name, value, copy);
     if (key !== 'state') {
       const dice = Object.assign(document.createElement('button'), { textContent: '↻', title: `Re-roll ${label}` });
-      dice.addEventListener('click', () => update(() => reroll(person, key, ctx())));
+      dice.addEventListener('click', () => update(() => {
+        if (key === 'email') forgetAlias();
+        return keepAlias(reroll(person, key, ctx()));
+      }));
       li.append(dice);
+    }
+    const service = $('alias-service').value;
+    if (key === 'email' && service) {
+      const alias = Object.assign(document.createElement('button'), {
+        textContent: '@', title: `New ${ALIAS_SERVICES[service].label} alias`, disabled: creating,
+      });
+      alias.addEventListener('click', () => newAlias(alias));
+      li.append(alias);
     }
     list.append(li);
   }
@@ -75,6 +103,55 @@ async function copyText(text, what) {
   } catch {
     say('Clipboard unavailable');
   }
+}
+
+// Asks the browser for one service's host access, only if it isn't already granted.
+// Returns an error message, or '' when access is in place.
+async function ensureAccess(service) {
+  const origins = [permissionFor(service)];
+  try {
+    if (await chrome.permissions.contains({ origins })) return '';
+    if (await chrome.permissions.request({ origins })) return '';
+    return `${ALIAS_SERVICES[service].label} needs your permission before it can create aliases.`;
+  } catch (err) {
+    return `Couldn't get permission: ${err.message}`;
+  }
+}
+
+// The only path to the network: one click, one alias.
+async function newAlias(button) {
+  if (creating) return;
+  creating = true;
+  button.disabled = true;
+  const service = $('alias-service').value;
+  const { label } = ALIAS_SERVICES[service];
+  let done = '';
+  try {
+    const denied = await ensureAccess(service);
+    if (denied) {
+      done = denied;
+      return;
+    }
+    say(`Creating a ${label} alias. Keep this open…`);
+    const email = await createAlias(service, { apiKey: aliasKeys[service], site });
+    aliasEmail = email;
+    chrome.storage.session.set({ lastAlias: { email, site } }).catch(() => {});
+    person = { ...person, email };
+    done = `New ${label} alias`;
+  } catch (err) {
+    done = err.message;
+  } finally {
+    creating = false;
+    render();
+    say(done);
+  }
+}
+
+function showAliasKey() {
+  const service = $('alias-service').value;
+  $('alias-key-row').hidden = !service;
+  $('alias-key').placeholder = service ? ALIAS_SERVICES[service].keyHelp : '';
+  $('alias-key').value = aliasKeys[service] ?? '';
 }
 
 async function autofill() {
@@ -105,6 +182,34 @@ function boot(saved) {
   $('email-style').value = EMAIL_STYLES.includes(saved.emailStyle) ? saved.emailStyle : 'name';
   enabled = { ...enabled, ...saved.enabled };
 
+  const services = $('alias-service');
+  for (const [id, { label }] of Object.entries(ALIAS_SERVICES)) {
+    services.append(Object.assign(document.createElement('option'), { value: id, textContent: label }));
+  }
+  services.value = Object.hasOwn(ALIAS_SERVICES, saved.aliasService) ? saved.aliasService : '';
+  // Builds before per-service keys kept one shared key; it is not migrated, only removed.
+  chrome.storage.local.remove('aliasKey').catch(() => {});
+  aliasKeys = Object.fromEntries(Object.keys(ALIAS_SERVICES).map((id) => [id, String(saved.aliasKeys?.[id] ?? '')]));
+  showAliasKey();
+  let current = services.value;
+  services.addEventListener('change', async () => {
+    // Give up access to the service being left, so None really means no access.
+    if (current) chrome.permissions.remove({ origins: [permissionFor(current)] }).catch(() => {});
+    current = services.value;
+    saveSettings();
+    showAliasKey();
+    if (person) render();
+    if (!current) return say('');
+    // Ask now, while the user is clearly choosing a service, so the first alias doesn't prompt.
+    const denied = await ensureAccess(current);
+    say(denied || `Paste your ${ALIAS_SERVICES[current].label} key, then press @ on the Email row.`);
+  });
+  $('alias-key').addEventListener('input', () => {
+    if (!current) return;
+    aliasKeys[current] = $('alias-key').value.trim();
+    saveSettings();
+  });
+
   $('generate').addEventListener('click', async () => {
     saveSettings();
     const state = select.value;
@@ -114,7 +219,7 @@ function boot(saved) {
       return say(err.message);
     }
     // A slower load for a state the user has since changed away from is dropped.
-    if (select.value === state) update(() => generate(state, ctx()));
+    if (select.value === state) update(() => keepAlias(generate(state, ctx())));
   });
   $('copy-line').addEventListener('click', () => copyText(oneLineAddress(person), 'address'));
   $('autofill').addEventListener('click', autofill);
@@ -136,8 +241,13 @@ function siteOf(url) {
 // The popup doesn't wait for the tab: it boots on settings alone, and a site email
 // generated before the hostname arrives is re-rolled once it does.
 const activeTab = chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
-activeTab.then(([tab]) => {
+Promise.all([activeTab, chrome.storage.session.get('lastAlias').catch(() => ({}))]).then(([[tab], { lastAlias }]) => {
   site = siteOf(tab?.url);
-  if (site && person && $('email-style').value === 'site') update(() => reroll(person, 'email', ctx()));
+  // Bring back an alias made for this same site before the popup last closed.
+  if (lastAlias?.email && lastAlias.site === site) {
+    aliasEmail = lastAlias.email;
+    if (person) update(() => keepAlias(person));
+  } else if (lastAlias) forgetAlias();
+  if (site && person && !aliasEmail && $('email-style').value === 'site') update(() => reroll(person, 'email', ctx()));
 });
-chrome.storage.local.get(['state', 'domain', 'emailStyle', 'enabled']).then(boot, () => boot({}));
+chrome.storage.local.get(['state', 'domain', 'emailStyle', 'enabled', 'aliasService', 'aliasKeys']).then(boot, () => boot({}));
