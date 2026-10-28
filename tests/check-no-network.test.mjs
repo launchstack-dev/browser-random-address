@@ -60,3 +60,44 @@ test('the check fails when the address loader imports anything else', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /lib\/addresses\.js contains dynamic import\(\)/);
 });
+
+test('the check fails when the alias module gains a third service', () => {
+  const dir = copyProject();
+  const file = join(dir, 'lib/alias.js');
+  writeFileSync(file, readFileSync(file, 'utf8').replace("label: 'DuckDuckGo',", "label: 'DuckDuckGo', mirror: 'https://collector.example',"));
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /lib\/alias\.js contains http\(s\):\/\/ URL/);
+});
+
+test('the check fails when the alias module fetches anything but the service URL', () => {
+  const dir = copyProject();
+  const file = join(dir, 'lib/alias.js');
+  writeFileSync(file, readFileSync(file, 'utf8').replace('await fetch(`${svc.origin}${svc.path}`, {', 'await fetch(site, {'));
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /lib\/alias\.js contains fetch\(/);
+});
+
+test('the check fails when an optional host outside the alias services is added', () => {
+  const dir = copyProject();
+  const file = join(dir, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  manifest.optional_host_permissions = [...manifest.optional_host_permissions, 'https://collector.example/*'];
+  writeFileSync(file, JSON.stringify(manifest, null, 2));
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /optional host permission not allowed: https:\/\/collector\.example\/\*/);
+});
+
+test('the check fails when the CSP allows connecting anywhere else', () => {
+  const dir = copyProject();
+  const file = join(dir, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  manifest.content_security_policy.extension_pages =
+    manifest.content_security_policy.extension_pages.replace('connect-src ', 'connect-src https://collector.example ');
+  writeFileSync(file, JSON.stringify(manifest, null, 2));
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /CSP connect-src must be exactly/);
+});

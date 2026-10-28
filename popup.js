@@ -2,6 +2,7 @@ import { STATES } from './lib/states.js';
 import { generate, reroll, oneLineAddress, EMAIL_STYLES } from './lib/generate.js';
 import { fillForm } from './lib/autofill.js';
 import { hasAddresses, loadAddresses } from './lib/addresses.js';
+import { ALIAS_SERVICES, createAlias } from './lib/alias.js';
 import names from './data/names.js';
 import areaCodes from './data/areacodes.js';
 
@@ -15,6 +16,8 @@ const FIELDS = [
 const $ = (id) => document.getElementById(id);
 let person = null;
 let site = '';
+// The last alias created, so re-rolling a name doesn't throw it away.
+let aliasEmail = '';
 let enabled = Object.fromEntries(FIELDS.map(([key]) => [key, true]));
 
 const say = (msg) => { $('status').textContent = msg; };
@@ -26,6 +29,7 @@ function ctx() {
 function saveSettings() {
   chrome.storage.local.set({
     state: $('state').value, domain: $('domain').value.trim(), emailStyle: $('email-style').value, enabled,
+    aliasService: $('alias-service').value, aliasKey: $('alias-key').value.trim(),
   });
 }
 
@@ -50,8 +54,19 @@ function render() {
     li.append(use, name, value, copy);
     if (key !== 'state') {
       const dice = Object.assign(document.createElement('button'), { textContent: '↻', title: `Re-roll ${label}` });
-      dice.addEventListener('click', () => update(() => reroll(person, key, ctx())));
+      dice.addEventListener('click', () => update(() => {
+        const next = reroll(person, key, ctx());
+        return key !== 'email' && aliasEmail && person.email === aliasEmail ? { ...next, email: aliasEmail } : next;
+      }));
       li.append(dice);
+    }
+    const service = $('alias-service').value;
+    if (key === 'email' && service) {
+      const alias = Object.assign(document.createElement('button'), {
+        textContent: '@', title: `New ${ALIAS_SERVICES[service].label} alias`,
+      });
+      alias.addEventListener('click', () => newAlias(alias));
+      li.append(alias);
     }
     list.append(li);
   }
@@ -75,6 +90,32 @@ async function copyText(text, what) {
   } catch {
     say('Clipboard unavailable');
   }
+}
+
+// The only path to the network. It runs on a click, so the browser can show its
+// permission prompt; once the user has granted the service, the request is a no-op.
+async function newAlias(button) {
+  const service = $('alias-service').value;
+  const { label, origin } = ALIAS_SERVICES[service];
+  const granted = await chrome.permissions.request({ origins: [`${origin}/*`] }).catch(() => false);
+  if (!granted) return say(`${label} needs your permission before it can create aliases.`);
+  button.disabled = true;
+  say(`Creating a ${label} alias…`);
+  try {
+    const email = await createAlias(service, { apiKey: $('alias-key').value, site });
+    aliasEmail = email;
+    update(() => ({ ...person, email }));
+    say(`New ${label} alias`);
+  } catch (err) {
+    button.disabled = false;
+    say(err.message);
+  }
+}
+
+function showAliasKey() {
+  const service = $('alias-service').value;
+  $('alias-key-row').hidden = !service;
+  $('alias-key').placeholder = service ? ALIAS_SERVICES[service].keyHelp : '';
 }
 
 async function autofill() {
@@ -104,6 +145,24 @@ function boot(saved) {
   $('domain').value = saved.domain || 'example.com';
   $('email-style').value = EMAIL_STYLES.includes(saved.emailStyle) ? saved.emailStyle : 'name';
   enabled = { ...enabled, ...saved.enabled };
+
+  const services = $('alias-service');
+  for (const [id, { label }] of Object.entries(ALIAS_SERVICES)) {
+    services.append(Object.assign(document.createElement('option'), { value: id, textContent: label }));
+  }
+  services.value = Object.hasOwn(ALIAS_SERVICES, saved.aliasService) ? saved.aliasService : '';
+  $('alias-key').value = saved.aliasKey || '';
+  showAliasKey();
+  services.addEventListener('change', () => {
+    saveSettings();
+    showAliasKey();
+    if (person) render();
+    // Ask now, while the user is clearly choosing a service, so the first alias doesn't prompt.
+    const svc = ALIAS_SERVICES[services.value];
+    if (svc) chrome.permissions.request({ origins: [`${svc.origin}/*`] }).catch(() => false)
+      .then((ok) => say(ok ? `Paste your ${svc.label} key, then press @ on the Email row.` : `${svc.label} needs your permission to create aliases.`));
+  });
+  $('alias-key').addEventListener('change', saveSettings);
 
   $('generate').addEventListener('click', async () => {
     saveSettings();
@@ -138,6 +197,6 @@ function siteOf(url) {
 const activeTab = chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
 activeTab.then(([tab]) => {
   site = siteOf(tab?.url);
-  if (site && person && $('email-style').value === 'site') update(() => reroll(person, 'email', ctx()));
+  if (site && person && person.email !== aliasEmail && $('email-style').value === 'site') update(() => reroll(person, 'email', ctx()));
 });
-chrome.storage.local.get(['state', 'domain', 'emailStyle', 'enabled']).then(boot, () => boot({}));
+chrome.storage.local.get(['state', 'domain', 'emailStyle', 'enabled', 'aliasService', 'aliasKey']).then(boot, () => boot({}));
