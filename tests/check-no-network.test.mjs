@@ -30,7 +30,7 @@ test('the check fails when network code is injected', () => {
   appendFileSync(join(dir, 'popup.js'), "\nfetch('https://example.com');\n");
   const result = run(dir);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /popup\.js contains fetch\(/);
+  assert.match(result.stderr, /popup\.js contains fetch/);
 });
 
 test('the check fails when a host permission is added', () => {
@@ -61,22 +61,41 @@ test('the check fails when the address loader imports anything else', () => {
   assert.match(result.stderr, /lib\/addresses\.js contains dynamic import\(\)/);
 });
 
-test('the check fails when the alias module gains a third service', () => {
+// Edits lib/alias.js in a copy of the project and returns the check's result.
+function runWithAlias(edit) {
   const dir = copyProject();
   const file = join(dir, 'lib/alias.js');
-  writeFileSync(file, readFileSync(file, 'utf8').replace("label: 'DuckDuckGo',", "label: 'DuckDuckGo', mirror: 'https://collector.example',"));
-  const result = run(dir);
+  const before = readFileSync(file, 'utf8');
+  const after = edit(before);
+  assert.notEqual(after, before, 'the edit applied');
+  writeFileSync(file, after);
+  return run(dir);
+}
+
+test('the check fails when the alias module gains a third address', () => {
+  const result = runWithAlias((t) => t.replace("label: 'DuckDuckGo',", "label: 'DuckDuckGo', mirror: 'https://collector.example',"));
   assert.equal(result.status, 1);
   assert.match(result.stderr, /lib\/alias\.js contains http\(s\):\/\/ URL/);
 });
 
-test('the check fails when the alias module fetches anything but the service URL', () => {
-  const dir = copyProject();
-  const file = join(dir, 'lib/alias.js');
-  writeFileSync(file, readFileSync(file, 'utf8').replace('await fetch(`${svc.origin}${svc.path}`, {', 'await fetch(site, {'));
-  const result = run(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /lib\/alias\.js contains fetch\(/);
+test('the check fails when a service URL is pointed at another host, however it is written', () => {
+  for (const url of ["'https://relay.firefox.com.evil.example/x'", "'https:' + '/' + '/evil.example' + '/x'", "'https://' + 'evil.example'"]) {
+    const result = runWithAlias((t) => t.replace("'https://relay.firefox.com/api/v1/relayaddresses/'", url));
+    assert.equal(result.status, 1, url);
+    assert.match(result.stderr, /service relay points outside the alias origins/, url);
+  }
+});
+
+test('the check fails on any other use of fetch, called or not', () => {
+  for (const edit of [
+    (t) => t.replace('await globalThis.fetch(svc.url, {', 'await globalThis.fetch.call(null, svc.url, {'),
+    (t) => t.replace('await globalThis.fetch(svc.url, {', 'await globalThis.fetch(site, {'),
+    (t) => t.replace('export class AliasError', 'export const send = globalThis.fetch;\nexport class AliasError'),
+  ]) {
+    const result = runWithAlias(edit);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /lib\/alias\.js contains fetch/);
+  }
 });
 
 test('the check fails when an optional host outside the alias services is added', () => {
@@ -90,14 +109,19 @@ test('the check fails when an optional host outside the alias services is added'
   assert.match(result.stderr, /optional host permission not allowed: https:\/\/collector\.example\/\*/);
 });
 
-test('the check fails when the CSP allows connecting anywhere else', () => {
-  const dir = copyProject();
-  const file = join(dir, 'manifest.json');
-  const manifest = JSON.parse(readFileSync(file, 'utf8'));
-  manifest.content_security_policy.extension_pages =
-    manifest.content_security_policy.extension_pages.replace('connect-src ', 'connect-src https://collector.example ');
-  writeFileSync(file, JSON.stringify(manifest, null, 2));
-  const result = run(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /CSP connect-src must be exactly/);
+test('the check fails when any CSP directive is widened', () => {
+  for (const [from, to] of [
+    ['connect-src ', 'connect-src https://collector.example '],
+    ["img-src 'self'", "img-src 'self' https://collector.example"],
+    ["default-src 'none'", "default-src 'none' https:"],
+  ]) {
+    const dir = copyProject();
+    const file = join(dir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(file, 'utf8'));
+    manifest.content_security_policy.extension_pages = manifest.content_security_policy.extension_pages.replace(from, to);
+    writeFileSync(file, JSON.stringify(manifest, null, 2));
+    const result = run(dir);
+    assert.equal(result.status, 1, to);
+    assert.match(result.stderr, /CSP must be exactly/, to);
+  }
 });

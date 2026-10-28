@@ -1,16 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAlias, ALIAS_SERVICES, AliasError } from '../lib/alias.js';
+import { createAlias, ALIAS_SERVICES, AliasError, permissionFor } from '../lib/alias.js';
 
-// A fake fetch that records the request and answers with the given status and JSON.
+// createAlias uses the global network function, so each test swaps in a fake that
+// records the request and answers with the given status and JSON.
+const realFetch = globalThis.fetch;
+test.afterEach(() => { globalThis.fetch = realFetch; });
 function fakeFetch(status, json) {
   const calls = [];
-  const fetch = async (url, init) => {
+  globalThis.fetch = async (url, init) => {
     calls.push({ url, init });
     return { ok: status >= 200 && status < 300, status, json: async () => json };
   };
-  return { fetch, calls };
+  return { calls };
 }
+const failWith = (impl) => { globalThis.fetch = impl; };
 
 const rejectsWith = (promise, code) => assert.rejects(promise, (err) => {
   assert.ok(err instanceof AliasError, `AliasError, got ${err}`);
@@ -19,15 +23,15 @@ const rejectsWith = (promise, code) => assert.rejects(promise, (err) => {
   return true;
 });
 
-test('services list Relay and DuckDuckGo with their origins', () => {
+test('services list Relay and DuckDuckGo with their permission patterns', () => {
   assert.deepEqual(Object.keys(ALIAS_SERVICES), ['relay', 'duck']);
-  assert.equal(ALIAS_SERVICES.relay.origin, 'https://relay.firefox.com');
-  assert.equal(ALIAS_SERVICES.duck.origin, 'https://quack.duckduckgo.com');
+  assert.equal(permissionFor('relay'), 'https://relay.firefox.com/*');
+  assert.equal(permissionFor('duck'), 'https://quack.duckduckgo.com/*');
 });
 
 test('Relay: posts the site with a Token header and returns full_address', async () => {
-  const { fetch, calls } = fakeFetch(201, { full_address: 'x7k2m9p@mozmail.com' });
-  assert.equal(await createAlias('relay', { apiKey: 'k1', site: 'www.amazon.com', fetch }), 'x7k2m9p@mozmail.com');
+  const { calls } = fakeFetch(201, { full_address: 'x7k2m9p@mozmail.com' });
+  assert.equal(await createAlias('relay', { apiKey: 'k1', site: 'www.amazon.com' }), 'x7k2m9p@mozmail.com');
   const [{ url, init }] = calls;
   assert.equal(url, 'https://relay.firefox.com/api/v1/relayaddresses/');
   assert.equal(init.method, 'POST');
@@ -39,13 +43,13 @@ test('Relay: posts the site with a Token header and returns full_address', async
 });
 
 test('Relay: accepts a premium subdomain address', async () => {
-  const { fetch } = fakeFetch(201, { full_address: 'shop.x1@me.mozmail.com' });
-  assert.equal(await createAlias('relay', { apiKey: 'k', site: '', fetch }), 'shop.x1@me.mozmail.com');
+  fakeFetch(201, { full_address: 'shop.x1@me.mozmail.com' });
+  assert.equal(await createAlias('relay', { apiKey: 'k', site: '' }), 'shop.x1@me.mozmail.com');
 });
 
 test('DuckDuckGo: posts with a Bearer header and no body, adds @duck.com', async () => {
-  const { fetch, calls } = fakeFetch(201, { address: 'abc-def123' });
-  assert.equal(await createAlias('duck', { apiKey: 't1', site: 'www.amazon.com', fetch }), 'abc-def123@duck.com');
+  const { calls } = fakeFetch(201, { address: 'abc-def123' });
+  assert.equal(await createAlias('duck', { apiKey: 't1', site: 'www.amazon.com' }), 'abc-def123@duck.com');
   const [{ url, init }] = calls;
   assert.equal(url, 'https://quack.duckduckgo.com/api/email/addresses');
   assert.equal(init.method, 'POST');
@@ -55,8 +59,8 @@ test('DuckDuckGo: posts with a Bearer header and no body, adds @duck.com', async
 });
 
 test('a missing key fails before any request', async () => {
-  const { fetch, calls } = fakeFetch(201, {});
-  await rejectsWith(createAlias('duck', { apiKey: '  ', site: '', fetch }), 'bad_key');
+  const { calls } = fakeFetch(201, {});
+  await rejectsWith(createAlias('duck', { apiKey: '  ', site: '' }), 'bad_key');
   assert.equal(calls.length, 0);
 });
 
@@ -66,11 +70,12 @@ test('HTTP errors map to codes the popup can explain', async () => {
     ['duck', 401, {}, 'bad_key'],
     ['relay', 403, { error_code: 'free_tier_limit', detail: 'You’ve used all 5 email masks' }, 'limit'],
     ['relay', 403, { error_code: 'account_is_paused', detail: 'Your account is paused.' }, 'refused'],
+    ['relay', 401, { error_code: 'authentication_failed', detail: 'Invalid token.' }, 'bad_key'],
     ['relay', 429, {}, 'rate_limited'],
     ['duck', 500, null, 'refused'],
   ]) {
-    const { fetch } = fakeFetch(status, json);
-    await rejectsWith(createAlias(service, { apiKey: 'k', site: 'a.com', fetch }), code);
+    fakeFetch(status, json);
+    await rejectsWith(createAlias(service, { apiKey: 'k', site: 'a.com' }), code);
   }
 });
 
@@ -82,16 +87,16 @@ test('an address that does not look right is refused, not filled into a form', a
     ['duck', { address: 'abc@other.com' }],
     ['duck', { address: '' }],
   ]) {
-    const { fetch } = fakeFetch(201, json);
-    await rejectsWith(createAlias(service, { apiKey: 'k', site: '', fetch }), 'bad_response');
+    fakeFetch(201, json);
+    await rejectsWith(createAlias(service, { apiKey: 'k', site: '' }), 'bad_response');
   }
 });
 
 test('network failures and timeouts become offline', async () => {
-  const down = async () => { throw new TypeError('Failed to fetch'); };
-  await rejectsWith(createAlias('relay', { apiKey: 'k', site: '', fetch: down }), 'offline');
-  const hang = (url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
-  await rejectsWith(createAlias('duck', { apiKey: 'k', site: '', fetch: hang, timeoutMs: 20 }), 'offline');
+  failWith(async () => { throw new TypeError('Failed to fetch'); });
+  await rejectsWith(createAlias('relay', { apiKey: 'k', site: '' }), 'offline');
+  failWith((url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))));
+  await rejectsWith(createAlias('duck', { apiKey: 'k', site: '', timeoutMs: 20 }), 'offline');
 });
 
 test('an unknown service is a programming error, not an AliasError', async () => {

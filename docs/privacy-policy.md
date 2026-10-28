@@ -20,7 +20,7 @@ By default the extension makes no network requests. Its manifest declares no hos
 - **Firefox Relay** (`relay.firefox.com`, run by Mozilla) receives your API key and the hostname of the current tab, which Relay stores with the new mask.
 - **DuckDuckGo** (`quack.duckduckgo.com`) receives your access token and nothing else.
 
-Requests are sent without your browser cookies. The service's own privacy policy covers what it does with the request. Nothing is sent to any other party, and nothing is sent at all until you press **@**. To stop, set **Alias service** to None and remove the site access in your browser's extension settings.
+Like any web request, each one also reveals your IP address, your browser's user agent and the extension's identifier (in the `Origin` header) to that service. Requests are sent without your browser cookies. The service's own privacy policy covers what it does with the request. Nothing is sent to any other party, and nothing is sent at all until you press **@**. To stop, set **Alias service** to None: the extension gives up its access to that service at the same time. You can confirm it in your browser's extension settings under Site access.
 
 The source is unminified and checked automatically for network code. You can verify this yourself: see the "Don't trust me, check me" section of the [README](../README.md).
 
