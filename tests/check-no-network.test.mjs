@@ -11,7 +11,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Copies the shipped files plus the check script into a temp dir so the real tree is never touched.
 function copyProject() {
   const dir = mkdtempSync(join(tmpdir(), 'ra-check-'));
-  for (const f of ['manifest.json', 'popup.html', 'popup.css', 'popup.js', 'lib', 'data']) {
+  for (const f of ['manifest.json', 'popup.html', 'popup.css', 'popup.js', 'options.html', 'options.js', 'lib', 'data']) {
     cpSync(join(root, f), join(dir, f), { recursive: true });
   }
   mkdirSync(join(dir, 'scripts'));

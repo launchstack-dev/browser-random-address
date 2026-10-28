@@ -102,3 +102,12 @@ test('network failures and timeouts become offline', async () => {
 test('an unknown service is a programming error, not an AliasError', async () => {
   await assert.rejects(createAlias('gmail', { apiKey: 'k', site: '' }), (err) => !(err instanceof AliasError));
 });
+
+test('accessFor asks for the host, plus Firefox data consent only when supported', async () => {
+  const { accessFor } = await import('../lib/alias.js');
+  assert.deepEqual(accessFor('relay', false), { origins: ['https://relay.firefox.com/*'] });
+  assert.deepEqual(accessFor('relay', true),
+    { origins: ['https://relay.firefox.com/*'], data_collection: ['authenticationInfo', 'browsingActivity'] });
+  assert.deepEqual(accessFor('duck', true),
+    { origins: ['https://quack.duckduckgo.com/*'], data_collection: ['authenticationInfo'] });
+});
