@@ -1,6 +1,6 @@
 # Random Address: offline random US address, name, phone and email generator for Chrome and Brave
 
-Random Address generates a random US address, name, phone number and email for the state you pick, and fills the signup form on the current page with one click. It makes no network requests: no host permissions, no tracking, nothing leaves your browser.
+Random Address generates a random US address, name, phone number and email for the state you pick, and fills the signup form on the current page with one click. Out of the box it makes no network requests: no host permissions, no tracking, nothing leaves your browser. If you choose, it can also create a real alias with Firefox Relay or DuckDuckGo Email Protection. Only then does it contact that one service, and only when you press the button.
 
 <p align="center">
   <img src="docs/popup.png" alt="The Random Address popup showing a California name, address, phone number and email, each with a checkbox, copy and re-roll buttons" width="320">
@@ -31,24 +31,24 @@ Each field has a checkbox (include it in autofill or not), a copy button, and a 
 Privacy tools earn trust by being easy to check. These take about a minute:
 
 1. **Turn Wi-Fi off and press Generate.** It still works, because all the data is inside the extension.
-2. **Look at the permissions.** Open `manifest.json`. The permissions are `activeTab`, `scripting` and `storage`. There is no `host_permissions`, no content script, no background page.
-3. **Watch the network tab.** Right-click the popup, choose Inspect, open the Network tab, and press Generate a few times. You should see no requests to any `http` or `https` host.
-4. **Run the check.** `npm run check` fails if any shipped file contains `fetch`, `XMLHttpRequest`, `WebSocket`, `eval`, a dynamic `import()`, or a URL. There is one exception, matched character for character: `lib/addresses.js` imports the address file for the state you pick from the extension's own `data/addresses/` folder, so the popup loads one state instead of all of them. Editing that line in any way makes the check fail again.
-5. **Watch the check fail.** `npm test` includes tests that inject a `fetch` call and a host permission into a copy of the project and assert that the check rejects both.
+2. **Look at the permissions.** Open `manifest.json`. The permissions are `activeTab`, `scripting` and `storage`. There is no `host_permissions`, no content script, no background page. The only optional host permissions are the two alias services, and the browser grants one only when you pick it and confirm its prompt. Check `chrome://extensions` > Random Address > Details > Site access to see whether you have.
+3. **Watch the network tab.** Right-click the popup, choose Inspect, open the Network tab, and press Generate a few times. You should see no requests to any `http` or `https` host. With an alias service turned on, pressing **@** makes exactly one `POST` to that service and nothing else.
+4. **Run the check.** `npm run check` fails if any shipped file contains `fetch`, `XMLHttpRequest`, `WebSocket`, `eval`, a dynamic `import()`, or a URL. There is one exception, matched character for character: `lib/addresses.js` imports the address file for the state you pick from the extension's own `data/addresses/` folder, so the popup loads one state instead of all of them. The other exception is `lib/alias.js`: one line that sends the request, and the two service URLs. The check also loads that module and confirms each service URL really points at `relay.firefox.com` or `quack.duckduckgo.com`, which catches a URL assembled from pieces. Any other use of `fetch`, any other URL, a changed CSP (the whole policy is pinned, not just `connect-src`) or another host in the manifest makes the check fail. It is a text check, so treat it as a tripwire. The CSP is the enforcement.
+5. **Watch the check fail.** `npm test` includes tests that inject a `fetch` call, a host permission, a third alias host and a wider CSP into a copy of the project and assert that the check rejects each one.
 
-What these prove, and what they don't: steps 1 and 3 show the extension works offline now, which is weak evidence by itself. The real guarantee is the combination of the CSP, the absence of network code, and source you can read. Chrome has no permission that hard-blocks network access, so no extension can promise that through a setting. This one promises it through code you can inspect.
+What these prove, and what they don't: steps 1 and 3 show the extension works offline now, which is weak evidence by itself. The real guarantee is the combination of the CSP, the absence of network code outside `lib/alias.js`, and source you can read. The CSP allows the two alias services for everyone, because a CSP can't be switched per user. With no service turned on, the extension holds no permission to reach them and no code path calls them. Switching the service back to None gives the permission up. One gap applies to every extension of this kind: the autofill routine runs inside the web page, where the extension's CSP doesn't reach, so only the source check covers it. Chrome has no permission that hard-blocks network access, so no extension can promise that through a setting. This one promises it through code you can inspect.
 
 ### Claims and how to check them
 
 | Claim | How to check it |
 |---|---|
-| It asks for no access to websites | `manifest.json` has no `host_permissions` or `content_scripts` |
-| It can't send data anywhere | The manifest CSP sets `connect-src 'none'` and `default-src 'none'` |
-| It contains no network code | `npm run check` |
+| It asks for no access to websites | `manifest.json` has no `host_permissions` or `content_scripts`. Its `optional_host_permissions` are only the two alias services, granted only if you pick one |
+| Its pages can't send data anywhere else | The manifest CSP sets `default-src 'none'` and allows connections only to `relay.firefox.com` and `quack.duckduckgo.com`. The autofill routine runs inside the page, outside that CSP. The source check rejects the usual ways out (network calls, URLs, image beacons, navigation, loading elements, computed lookups), but it is a text check, not a sandbox |
+| Its only network code is the alias button | `npm run check` |
 | That check actually works | `tests/check-no-network.test.mjs` |
 | It has no dependencies | `package.json` lists none. There is no build step and no minification |
 | It only runs when you click | There is no background page or content script. Autofill is injected into the current tab when you press the button, through `activeTab` |
-| It stores nothing but your settings | `chrome.storage.local` holds your state, email domain, email style and checkbox choices, and nothing else |
+| It stores nothing but your settings | `chrome.storage.local` holds your state, email domain, email style, checkbox choices and, if you use one, your alias service and its key. `chrome.storage.session` holds the last alias you created and its site until you quit the browser. Nothing else |
 
 ## Install
 
@@ -89,6 +89,15 @@ Run `git pull` (or download the new version over the old folder), then click the
 
 Autofill matches fields by their `autocomplete` attribute first, then by name, id, placeholder and label. It fills empty fields only (plus fields it filled earlier), and it skips passwords, usernames, company names and card fields. It does not reach into shadow DOM.
 
+### Creating aliases with Firefox Relay or DuckDuckGo
+
+Pick a service under **Alias service**, allow it when the browser asks, and paste your key. An **@** button appears on the Email row. Each press creates one new alias and puts it in the Email field. Generate and ↻ never contact the service, so re-rolling never uses up aliases. The alias stays in the Email field through Generate and name re-rolls, and is still there if the popup closes and you reopen it on the same site, so you don't spend a second alias by accident. Press ↻ on Email to drop it. Each service keeps its own key, so switching services never sends one service's key to the other. Switching to another service or to None gives up the old service's access.
+
+- **Firefox Relay:** copy the API key from the Relay website's Settings page. The free plan has a small mask limit (5 by default), so create masks only for forms you mean to submit. Relay records the site's hostname with each mask so you can see where it was used.
+- **DuckDuckGo:** free, with no alias limit that I could find, but DuckDuckGo doesn't show the key anywhere. Bitwarden's documented workaround: on duck.com's Email Protection page, open the **Autofill** tab, open your browser's developer tools on the **Network** tab, press **Generate Private Duck Address**, select the `addresses` request, and copy the value after `Bearer ` in its `authorization` header. DuckDuckGo doesn't document this API, so it may change without notice. DuckDuckGo isn't told which site the alias is for.
+
+The key is stored as plain text in `chrome.storage.local` on your device. Anyone with that key can create aliases on your account, so treat it like a password. Requests are sent without your browser cookies, so being signed in to Relay or duck.com in the same browser doesn't matter.
+
 ### Using it with SimpleLogin, Proton Pass or your own catch-all
 
 - **Catch-all domain:** set the email domain to one you own that has catch-all enabled (SimpleLogin custom domains, Proton, or your own mail server). Every address Random Address generates then becomes a working alias. Pick the **From the site** email style to get addresses like `amazon.k7qx2@yourdomain.com`, so when spam arrives you can see which site gave the address away. The random tail stops anyone guessing the address from the site name. **Random** works too if you'd rather the alias say nothing at all. Neither style hints at the name on the form.
@@ -97,7 +106,7 @@ Autofill matches fields by their `autocomplete` attribute first, then by name, i
 ## FAQ
 
 ### Is there a random address generator that works offline?
-Yes, this one. All the addresses are bundled in the extension, so it needs no network connection and sends nothing anywhere.
+Yes, this one. All the addresses are bundled in the extension, so it needs no network connection and sends nothing anywhere. Only the optional alias button needs a connection.
 
 ### Are the addresses real?
 The streets, cities and ZIP codes are real address points from the USDOT National Address Database, with unit numbers, landmarks and coordinates removed. They are places, not people: the data has no names attached. They are also real places where people may live, which is why the limits below matter.
@@ -106,10 +115,10 @@ The streets, cities and ZIP codes are real address points from the USDOT Nationa
 No. The last seven digits always fall in `555-0100` to `555-0199`, a block reserved for fictional use. The area code is a real one for the state so the number looks right to a form.
 
 ### Does it phone home?
-No. It has no network code, no host permissions, and a CSP that forbids connections. See [Don't trust me, check me](#dont-trust-me-check-me).
+No. Unless you turn on an alias service, it holds no host permissions and makes no requests. With one turned on, it contacts only that service, only when you press **@**. See [Don't trust me, check me](#dont-trust-me-check-me).
 
 ### Does it work with SimpleLogin or Proton Pass?
-Yes, in two ways. See [Using it with SimpleLogin, Proton Pass or your own catch-all](#using-it-with-simplelogin-proton-pass-or-your-own-catch-all). It doesn't call either service's API, because that would need network access.
+Yes, in two ways. See [Using it with SimpleLogin, Proton Pass or your own catch-all](#using-it-with-simplelogin-proton-pass-or-your-own-catch-all). It doesn't call either service's API. For API-created aliases, see [Creating aliases with Firefox Relay or DuckDuckGo](#creating-aliases-with-firefox-relay-or-duckduckgo).
 
 ### Which states are covered?
 44 states plus DC. See [Coverage](#coverage).
@@ -159,7 +168,7 @@ NAD is not a mailing list and neither is this extension: please don't use the ad
 
 ## Building the data
 
-`scripts/build-data.mjs` is the only code that touches the network, and only on a developer machine. Its output in `data/` is committed, so using or installing the extension never runs it.
+Apart from the opt-in alias button, `scripts/build-data.mjs` is the only code that touches the network, and only on a developer machine. Its output in `data/` is committed, so using or installing the extension never runs it.
 
 ```sh
 # Names: SSA baby names (GitHub mirror) and Census 2010 surnames
@@ -187,7 +196,7 @@ Store listing copy, permission justifications and screenshots are in [docs/store
 ## Glossary
 
 - **Catch-all domain:** a domain whose mail server accepts mail for any address, so every address you invent works.
-- **CSP (Content Security Policy):** a rule in `manifest.json` that limits what the extension's pages can load or connect to. This one forbids all connections.
+- **CSP (Content Security Policy):** a rule in `manifest.json` that limits what the extension's pages can load or connect to. This one allows connections only to the two alias services.
 - **NAD:** the National Address Database, the US Department of Transportation's collection of address points from state and local governments.
 - **555-01XX:** the telephone numbers `555-0100` to `555-0199`, which are reserved for use in fiction and never assigned to real subscribers.
 - **`activeTab`:** a Chrome permission that gives an extension access to the current tab only after you click it.
