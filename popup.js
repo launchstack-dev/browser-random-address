@@ -2,9 +2,12 @@ import { STATES } from './lib/states.js';
 import { generate, reroll, oneLineAddress, EMAIL_STYLES } from './lib/generate.js';
 import { fillForm } from './lib/autofill.js';
 import { hasAddresses, loadAddresses } from './lib/addresses.js';
-import { ALIAS_SERVICES, createAlias, permissionFor } from './lib/alias.js';
+import { ALIAS_SERVICES, createAlias, accessFor } from './lib/alias.js';
 import names from './data/names.js';
 import areaCodes from './data/areacodes.js';
+
+// Firefox's browser.* returns promises everywhere; Chrome's chrome.* does in MV3.
+const chrome = globalThis.browser ?? globalThis.chrome;
 
 // addresses fills in one state at a time as states are picked.
 const data = { addresses: {}, names, areaCodes };
@@ -22,7 +25,9 @@ let site = '';
 let aliasEmail = '';
 // True while an alias request is in flight. A re-render mid-request draws @ disabled.
 let creating = false;
-// Each service keeps its own key, so switching services never sends one service's key to the other.
+// Set on the options page. Each service keeps its own key, so switching services
+// never sends one service's key to the other. The popup only reads these.
+let aliasService = '';
 let aliasKeys = {};
 let enabled = Object.fromEntries(FIELDS.map(([key]) => [key, true]));
 
@@ -35,7 +40,6 @@ function ctx() {
 function saveSettings() {
   chrome.storage.local.set({
     state: $('state').value, domain: $('domain').value.trim(), emailStyle: $('email-style').value, enabled,
-    aliasService: $('alias-service').value, aliasKeys,
   });
 }
 
@@ -73,10 +77,9 @@ function render() {
       }));
       li.append(dice);
     }
-    const service = $('alias-service').value;
-    if (key === 'email' && service) {
+    if (key === 'email' && aliasService) {
       const alias = Object.assign(document.createElement('button'), {
-        textContent: '@', title: `New ${ALIAS_SERVICES[service].label} alias`, disabled: creating,
+        textContent: '@', title: `New ${ALIAS_SERVICES[aliasService].label} alias`, disabled: creating,
       });
       alias.addEventListener('click', () => newAlias(alias));
       li.append(alias);
@@ -105,31 +108,23 @@ async function copyText(text, what) {
   }
 }
 
-// Asks the browser for one service's host access, only if it isn't already granted.
-// Returns an error message, or '' when access is in place.
-async function ensureAccess(service) {
-  const origins = [permissionFor(service)];
-  try {
-    if (await chrome.permissions.contains({ origins })) return '';
-    if (await chrome.permissions.request({ origins })) return '';
-    return `${ALIAS_SERVICES[service].label} needs your permission before it can create aliases.`;
-  } catch (err) {
-    return `Couldn't get permission: ${err.message}`;
-  }
-}
-
 // The only path to the network: one click, one alias.
 async function newAlias(button) {
   if (creating) return;
   creating = true;
   button.disabled = true;
-  const service = $('alias-service').value;
+  const service = aliasService;
   const { label } = ALIAS_SERVICES[service];
   let done = '';
   try {
-    const denied = await ensureAccess(service);
-    if (denied) {
-      done = denied;
+    // The popup never prompts (a prompt can close it, and Firefox wants it inside a
+    // click). Access is granted on the options page; send the user there if it's missing.
+    // On Firefox, consent to the data the service receives can be withdrawn separately
+    // from site access, so check both. The popup never prompts, so awaiting here is fine.
+    const dataConsent = 'data_collection' in (await chrome.permissions.getAll());
+    if (!(await chrome.permissions.contains(accessFor(service, dataConsent)))) {
+      done = `Allow ${label} on the alias settings page first.`;
+      chrome.runtime.openOptionsPage().catch(() => {});
       return;
     }
     say(`Creating a ${label} alias. Keep this open…`);
@@ -147,11 +142,9 @@ async function newAlias(button) {
   }
 }
 
-function showAliasKey() {
-  const service = $('alias-service').value;
-  $('alias-key-row').hidden = !service;
-  $('alias-key').placeholder = service ? ALIAS_SERVICES[service].keyHelp : '';
-  $('alias-key').value = aliasKeys[service] ?? '';
+function showAliasSummary() {
+  $('alias-summary').textContent = aliasService ? ALIAS_SERVICES[aliasService].label : 'off';
+  $('alias-settings').textContent = aliasService ? 'Change' : 'Set up';
 }
 
 async function autofill() {
@@ -182,32 +175,19 @@ function boot(saved) {
   $('email-style').value = EMAIL_STYLES.includes(saved.emailStyle) ? saved.emailStyle : 'name';
   enabled = { ...enabled, ...saved.enabled };
 
-  const services = $('alias-service');
-  for (const [id, { label }] of Object.entries(ALIAS_SERVICES)) {
-    services.append(Object.assign(document.createElement('option'), { value: id, textContent: label }));
-  }
-  services.value = Object.hasOwn(ALIAS_SERVICES, saved.aliasService) ? saved.aliasService : '';
+  aliasService = Object.hasOwn(ALIAS_SERVICES, saved.aliasService) ? saved.aliasService : '';
+  aliasKeys = Object.fromEntries(Object.keys(ALIAS_SERVICES).map((id) => [id, String(saved.aliasKeys?.[id] ?? '')]));
   // Builds before per-service keys kept one shared key; it is not migrated, only removed.
   chrome.storage.local.remove('aliasKey').catch(() => {});
-  aliasKeys = Object.fromEntries(Object.keys(ALIAS_SERVICES).map((id) => [id, String(saved.aliasKeys?.[id] ?? '')]));
-  showAliasKey();
-  let current = services.value;
-  services.addEventListener('change', async () => {
-    // Give up access to the service being left, so None really means no access.
-    if (current) chrome.permissions.remove({ origins: [permissionFor(current)] }).catch(() => {});
-    current = services.value;
-    saveSettings();
-    showAliasKey();
+  showAliasSummary();
+  $('alias-settings').addEventListener('click', () => chrome.runtime.openOptionsPage().catch(() => {}));
+  // Settings can change on the options page while this popup is open.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !(changes.aliasService || changes.aliasKeys)) return;
+    if (changes.aliasService) aliasService = Object.hasOwn(ALIAS_SERVICES, changes.aliasService.newValue) ? changes.aliasService.newValue : '';
+    if (changes.aliasKeys) aliasKeys = { ...aliasKeys, ...changes.aliasKeys.newValue };
+    showAliasSummary();
     if (person) render();
-    if (!current) return say('');
-    // Ask now, while the user is clearly choosing a service, so the first alias doesn't prompt.
-    const denied = await ensureAccess(current);
-    say(denied || `Paste your ${ALIAS_SERVICES[current].label} key, then press @ on the Email row.`);
-  });
-  $('alias-key').addEventListener('input', () => {
-    if (!current) return;
-    aliasKeys[current] = $('alias-key').value.trim();
-    saveSettings();
   });
 
   $('generate').addEventListener('click', async () => {

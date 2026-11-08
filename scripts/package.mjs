@@ -9,7 +9,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SHIPPED = ['manifest.json', 'popup.html', 'popup.css', 'popup.js', 'lib', 'data', 'icons'];
+const SHIPPED = ['manifest.json', 'popup.html', 'popup.css', 'popup.js', 'options.html', 'options.js', 'lib', 'data', 'icons'];
 
 const outArg = process.argv.indexOf('--out');
 const outDir = resolve(outArg > 0 ? process.argv[outArg + 1] : join(root, 'dist'));

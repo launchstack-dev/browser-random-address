@@ -68,6 +68,13 @@ Build the upload zip with `npm run package`. It writes `dist/random-address-<ver
 
 **Privacy policy URL:** https://github.com/launchstack-dev/browser-random-address/blob/main/docs/privacy-policy.md
 
+## Firefox Add-ons (addons.mozilla.org)
+
+The same `npm run package` zip uploads to AMO. Mark it compatible with Firefox for Android on the listing.
+
+- **Data collection:** the manifest declares `required: ["none"]` and `optional: ["authenticationInfo", "browsingActivity"]`. Firefox asks for the optional ones on the alias settings page, only when the user picks an alias service: the key for either service, plus the site's hostname for Firefox Relay.
+- **Notes for the reviewer:** "Source is the uploaded package itself: no build step, no minification, no dependencies. `web-ext lint` reports one warning, an `import()` with a variable in `lib/addresses.js`. It loads one bundled file, `data/addresses/<state>.js`, and the state is checked against the bundled index (`data/addresses/index.js`) before it is used in the path. The only network code is `lib/alias.js`, used only after the user opts in to an alias service."
+
 ## Account tab
 
 - **Trader / non-trader:** your declaration. The store asks for it for EU rules. This is a free, open-source tool, but the answer is yours to give.

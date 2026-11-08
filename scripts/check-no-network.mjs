@@ -47,7 +47,7 @@ if (/\.url\s*=(?!=)|\[\s*['"`]url['"`]\s*\]|defineProperty|Object\.assign/.test(
 }
 
 // Everything that ships. Build scripts, tests and docs may use the network or mention URLs.
-const SHIPPED = ['popup.html', 'popup.css', 'popup.js', 'lib', 'data'];
+const SHIPPED = ['popup.html', 'popup.css', 'popup.js', 'options.html', 'options.js', 'lib', 'data'];
 const FORBIDDEN = [
   [/\bfetch\b/, 'fetch'], [/XMLHttpRequest/, 'XMLHttpRequest'], [/WebSocket/, 'WebSocket'],
   [/EventSource/, 'EventSource'], [/sendBeacon/, 'sendBeacon'], [/importScripts/, 'importScripts'],

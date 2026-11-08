@@ -69,6 +69,18 @@ Put the folder somewhere permanent. The browser runs the extension from it, so m
 3. Click **Load unpacked** and pick the folder that directly contains `manifest.json`. If you cloned the repository, that is the top-level folder, not `docs/` or `lib/`.
 4. Pin it: click the puzzle-piece icon in the toolbar, then the pin next to Random Address.
 
+### Firefox and Firefox for Android
+
+The same folder works in Firefox 140 or later, and in Firefox for Android 142 or later. Until it is on addons.mozilla.org you load it for testing:
+
+- **Firefox desktop:** open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and pick `manifest.json`. Firefox removes it when it restarts.
+- **Firefox for Android**, from a computer over USB:
+  1. On the phone: **Settings > About phone**, tap **Build number** seven times, then turn on **USB debugging** in **Developer options**. In Firefox, turn on **Settings > Remote debugging via USB**.
+  2. On the computer: install Android's `adb` (`brew install android-platform-tools` on a Mac), plug the phone in, run `adb devices` and accept the prompt on the phone.
+  3. Run `npm run android`. It uses Mozilla's `web-ext` tool to install the extension into Firefox on the phone and reloads it when files change. With more than one device attached, add `-- --android-device <id from adb devices>`.
+
+On Android the popup opens as a full-screen panel from the Firefox menu (**⋮ > Extensions > Random Address**), and alias settings open in a tab.
+
 ### Update
 
 Run `git pull` (or download the new version over the old folder), then click the reload arrow on the extension's card in `brave://extensions`.
@@ -91,7 +103,7 @@ Autofill matches fields by their `autocomplete` attribute first, then by name, i
 
 ### Creating aliases with Firefox Relay or DuckDuckGo
 
-Pick a service under **Alias service**, allow it when the browser asks, and paste your key. An **@** button appears on the Email row. Each press creates one new alias and puts it in the Email field. Generate and ↻ never contact the service, so re-rolling never uses up aliases. The alias stays in the Email field through Generate and name re-rolls, and is still there if the popup closes and you reopen it on the same site, so you don't spend a second alias by accident. Press ↻ on Email to drop it. Each service keeps its own key, so switching services never sends one service's key to the other. Switching to another service or to None gives up the old service's access.
+Press **Set up** next to **Aliases** in the popup. That opens the alias settings page, where you pick a service, press **Allow access** and accept the browser's prompt, then paste your key. Every permission prompt happens on that page, never in the popup. Firefox 140 and later also ask you to consent to the data the service receives: your key, and for Relay the site's hostname. An **@** button then appears on the Email row. Each press creates one new alias and puts it in the Email field. Generate and ↻ never contact the service, so re-rolling never uses up aliases. The alias stays in the Email field through Generate and name re-rolls, and is still there if the popup closes and you reopen it on the same site, so you don't spend a second alias by accident. Press ↻ on Email to drop it. Each service keeps its own key, so switching services never sends one service's key to the other. Switching to another service or to None gives up the old service's access.
 
 - **Firefox Relay:** copy the API key from the Relay website's Settings page. The free plan has a small mask limit (5 by default), so create masks only for forms you mean to submit. Relay records the site's hostname with each mask so you can see where it was used.
 - **DuckDuckGo:** free, with no alias limit that I could find, but DuckDuckGo doesn't show the key anywhere. Bitwarden's documented workaround: on duck.com's Email Protection page, open the **Autofill** tab, open your browser's developer tools on the **Network** tab, press **Generate Private Duck Address**, select the `addresses` request, and copy the value after `Bearer ` in its `authorization` header. DuckDuckGo doesn't document this API, so it may change without notice. DuckDuckGo isn't told which site the alias is for.
@@ -125,6 +137,9 @@ Yes, in two ways. See [Using it with SimpleLogin, Proton Pass or your own catch-
 
 ### Is it on the Chrome Web Store?
 Not yet. Install it from source for now.
+
+### Does it work on my phone?
+On Android, yes, in Firefox for Android. See [Firefox and Firefox for Android](#firefox-and-firefox-for-android). Chrome for Android and Safari on iPhone don't run this kind of extension.
 
 ## Limits and what it won't do
 

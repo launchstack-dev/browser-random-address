@@ -4,11 +4,12 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Offline Chrome extension that generates a random US identity for signup forms.",
+  "description": "Chrome and Firefox extension that generates a random US identity for signup forms, offline, with optional Firefox Relay or DuckDuckGo aliases.",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "check": "node scripts/check-no-network.mjs",
     "package": "node scripts/package.mjs",
-    "ci": "npm run check && npm test"
+    "ci": "npm run check && npm test",
+    "android": "npx -y web-ext@8 run --target=firefox-android --firefox-apk org.mozilla.firefox --ignore-files 'tests/**' 'scripts/**' 'docs/**' 'dist/**' 'README.md' 'LICENSE' 'package.json'"
   }
 }

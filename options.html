@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Random Address: alias settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body class="page">
+  <h1>Alias service</h1>
+  <p class="note">Optional. With a service turned on, the @ button on the Email row creates a real alias on your own account. Nothing is sent until you press @. With None, the extension stays fully offline.</p>
+  <label class="setting">Service
+    <select id="alias-service">
+      <option value="">None (stay offline)</option>
+    </select>
+  </label>
+  <div id="service-setup" hidden>
+    <label class="setting">Key
+      <input id="alias-key" type="password" spellcheck="false" autocomplete="off">
+    </label>
+    <p class="note" id="key-help"></p>
+    <p class="setting">Access: <span id="access"></span>
+      <button id="grant" hidden>Allow access</button>
+    </p>
+  </div>
+  <p id="status" role="status"></p>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
