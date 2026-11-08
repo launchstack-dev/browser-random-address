@@ -54,7 +54,7 @@ Build the upload zip with `npm run package`. It writes `dist/random-address-<ver
 
 | Permission | Justification |
 |---|---|
-| `activeTab` | Lets the extension fill the form on the tab the user is on, only after the user clicks Autofill. It grants no access to any other tab or site. |
+| `activeTab` | Lets the extension fill the form on the tab the user is on, only after the user clicks Autofill, and read that tab's hostname when the user opens the popup, to label a generated email with the site (for example `amazon.k7qx2@yourdomain.com`). The hostname is not stored or sent anywhere. It grants no access to any other tab or site. |
 | `scripting` | Runs the fill routine in the current tab after the user clicks Autofill. No code is loaded from anywhere else. |
 | `storage` | Saves the user's last state, email domain, email style and field checkboxes on their own device (`chrome.storage.local`). Nothing is sent anywhere. |
 

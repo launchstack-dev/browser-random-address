@@ -82,3 +82,40 @@ test('random email style is unrelated to the name and works in reroll', () => {
   assert.match(q.email, /^[a-z][a-z0-9]{10}@me\.example$/);
   assert.match(reroll(p, 'email', { data, emailStyle: 'name', rng: one }).email, /^[a-z]+\.[a-z]+\d\d@example\.com$/);
 });
+
+test('site email style labels the address with the site it was made for', () => {
+  const cases = {
+    'www.amazon.com': 'amazon',
+    'accounts.google.com': 'google',
+    'shop.example.co.uk': 'example',
+    'bbc.com.au': 'bbc',
+    'localhost': 'localhost',
+    'xn--bcher-kva.example': 'xn--bcher-kva',
+    'a-very-long-company-name-here.com': 'a-very-long-company',
+    'WWW.Example.COM.': 'example',
+  };
+  for (const [site, label] of Object.entries(cases)) {
+    const p = generate('CA', { data, emailStyle: 'site', site, domain: 'me.example', rng: counter() });
+    assert.match(p.email, new RegExp(`^${label}\\.[a-z0-9]{5}@me\\.example$`), site);
+  }
+});
+
+test('site email style falls back to random when there is no usable site', () => {
+  for (const site of [undefined, '', '192.168.1.10', '[::1]']) {
+    const p = generate('CA', { data, emailStyle: 'site', site, domain: 'me.example', rng: counter() });
+    assert.match(p.email, /^[a-z][a-z0-9]{10}@me\.example$/, String(site));
+  }
+});
+
+test('re-rolling a site email keeps the label and changes the tail', () => {
+  const opts = { data, emailStyle: 'site', site: 'www.amazon.com', domain: 'me.example' };
+  const p = generate('CA', { ...opts, rng: zero });
+  const q = reroll(p, 'email', { ...opts, rng: one });
+  assert.match(q.email, /^amazon\.[a-z0-9]{5}@me\.example$/);
+  assert.notEqual(q.email, p.email);
+});
+
+test('EMAIL_STYLES lists every style the generator understands', async () => {
+  const { EMAIL_STYLES } = await import('../lib/generate.js');
+  assert.deepEqual(EMAIL_STYLES, ['name', 'random', 'site']);
+});

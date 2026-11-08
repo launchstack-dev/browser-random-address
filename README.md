@@ -33,7 +33,7 @@ Privacy tools earn trust by being easy to check. These take about a minute:
 1. **Turn Wi-Fi off and press Generate.** It still works, because all the data is inside the extension.
 2. **Look at the permissions.** Open `manifest.json`. The permissions are `activeTab`, `scripting` and `storage`. There is no `host_permissions`, no content script, no background page.
 3. **Watch the network tab.** Right-click the popup, choose Inspect, open the Network tab, and press Generate a few times. You should see no requests to any `http` or `https` host.
-4. **Run the check.** `npm run check` fails if any shipped file contains `fetch`, `XMLHttpRequest`, `WebSocket`, `eval`, or a URL.
+4. **Run the check.** `npm run check` fails if any shipped file contains `fetch`, `XMLHttpRequest`, `WebSocket`, `eval`, a dynamic `import()`, or a URL. There is one exception, matched character for character: `lib/addresses.js` imports the address file for the state you pick from the extension's own `data/addresses/` folder, so the popup loads one state instead of all of them. Editing that line in any way makes the check fail again.
 5. **Watch the check fail.** `npm test` includes tests that inject a `fetch` call and a host permission into a copy of the project and assert that the check rejects both.
 
 What these prove, and what they don't: steps 1 and 3 show the extension works offline now, which is weak evidence by itself. The real guarantee is the combination of the CSP, the absence of network code, and source you can read. Chrome has no permission that hard-blocks network access, so no extension can promise that through a setting. This one promises it through code you can inspect.
@@ -91,7 +91,7 @@ Autofill matches fields by their `autocomplete` attribute first, then by name, i
 
 ### Using it with SimpleLogin, Proton Pass or your own catch-all
 
-- **Catch-all domain:** set the email domain to one you own that has catch-all enabled (SimpleLogin custom domains, Proton, or your own mail server). Every address Random Address generates then becomes a working alias. Pick the **Random** email style so the alias doesn't hint at the name on the form.
+- **Catch-all domain:** set the email domain to one you own that has catch-all enabled (SimpleLogin custom domains, Proton, or your own mail server). Every address Random Address generates then becomes a working alias. Pick the **From the site** email style to get addresses like `amazon.k7qx2@yourdomain.com`, so when spam arrives you can see which site gave the address away. The random tail stops anyone guessing the address from the site name. **Random** works too if you'd rather the alias say nothing at all. Neither style hints at the name on the form.
 - **Let your password manager do the email:** untick the Email checkbox. Random Address fills everything else, and Proton Pass or SimpleLogin's own autofill creates the alias.
 
 ## FAQ
